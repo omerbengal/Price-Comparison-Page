@@ -1,4 +1,3 @@
-import time
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import quote_plus
@@ -79,4 +78,5 @@ def get_newegg_price(item: str) -> dict:
 
 # Main
 if __name__ == "__main__":
-    print(get_best_buy_price('iPhone'))
+    get_walmart_price(
+        'Sony XR85X93L 85" 4K Mini LED Smart Google TV with PS5 Features (2023)')
