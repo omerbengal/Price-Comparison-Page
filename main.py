@@ -31,53 +31,39 @@ def get_walmart_price(item: str) -> dict:
         soup = BeautifulSoup(response.content, 'html.parser')
 
         # Find the element containing the URL of the first product
-        first_product = soup.find_all(
+        products = soup.find_all(
             'a', class_='absolute w-100 h-100 z-1 hide-sibling-opacity')
 
         # Check if the element was found
-        if first_product:
-            # Extract the URL from the href attribute
-            product_url = first_product[0]['href']
-            # takes the string from the characters '/ip' including until the end of the string
-            product_url = product_url[product_url.index('/ip'):]
-        else:
-            print("Couldn't find the URL of the first product.")
+        if not products:
+            raise Exception("No items found in Walmart search page")
 
-        name_url = 'https://www.walmart.com' + product_url
-        print(name_url)
-        response = get_response(name_url)
+        first_product = products[0]
+        # Extract the URL from the href attribute
+        product_url = first_product['href']
+        # takes the string from the characters '/ip' including until the end of the string
+        product_url = product_url[product_url.index('/ip'):]
 
-        # check if response is valid
-        if response.status_code == 200:
-            # Parse the HTML content
-            soup = BeautifulSoup(response.content, 'html.parser')
+        final_url = 'https://www.walmart.com' + product_url
+        # Find the element containing the price of the first product
+        prices = soup.find_all(
+            'div', class_='mr1 mr2-xl b black lh-copy f5 f4-l')
 
-            # # Find the element containing the price of the product
-            # product_price = soup.find(
-            #     'span', class_='inline-flex flex-column')
+        if not prices:
+            raise Exception("Item price not found in Walmart search page")
 
-            # # Check if the element was found
-            # if product_price:
-            #     # Extract the name of the product
-            #     price = product_price.text
-            #     price_numbers = price.split('$')
-            #     price = price_numbers[1]
-            #     return price
-            # else:
-            #     print("Couldn't find the price of the product.")
-            # Find the element containing the price of the product
-            product_price = soup.find('span', itemprop='price')
-
-            # Check if the element was found
-            if product_price:
-                print(product_price)
-                # Extract the price of the product
-                price = product_price.text.strip()
-                return price
-            else:
-                print("Couldn't find the price of the product.")
+        first_price = prices[0]
+        # Extract the price from the text
+        price = first_price.text
+        price = price.replace('$', '').strip()
+        # Insert a dot before the last two digits
+        price = price[:-2] + '.' + price[-2:]
+        price = float(price)
+        # format the price to 2 decimal places
+        price = "{:.2f}".format(price)
+        return {"Site": "Walmart", "Item title name": final_url, "Price(USD)": price}  # nopep8
     else:
-        return {'error': 'Invalid response'}
+        raise Exception("Invalid Walmart search page response")
 
 
 def get_newegg_price(item: str) -> dict:
@@ -92,4 +78,4 @@ def get_newegg_price(item: str) -> dict:
 
 # Main
 if __name__ == "__main__":
-    print(get_walmart_price('macbook'))
+    pass
