@@ -1,7 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import quote_plus
-from fastapi import FastAPI
+from urllib.parse import quote_plus, urlparse, parse_qs
+from fastapi import FastAPI, HTTPException
+import re
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
@@ -67,40 +68,49 @@ def get_walmart_price(item: str) -> dict:
 
     # check if response is valid
     if response.status_code == 200:
+
+        # put reponse text in html file
+        with open('walmart.html', 'w') as file:
+            file.write(response.text)
+
         # Parse the HTML content
         soup = BeautifulSoup(response.content, 'html.parser')
 
         # Find the element containing the URL of the first product
-        products = soup.find_all(
-            'a', class_='absolute w-100 h-100 z-1 hide-sibling-opacity')
+        # select a div which has the attribute "data-testid" and it's value is "item-stack"
+        products = soup.select('div[data-testid="item-stack"]')
 
         # Check if the element was found
         if not products:
             raise Exception("No items found in Walmart search page")
 
-        first_product = products[0]
-        # Extract the URL from the href attribute
-        product_url = first_product['href']
-        # takes the string from the characters '/ip' including until the end of the string
-        product_url = product_url[product_url.index('/ip'):]
+        # get the link of the first product:
+        # structure: products div > div > div > div with attribute "role" and value "group" > a
+        for product in products:
+            role_group_element = product.find('div').find('div').select_one('div[role="group"]')  # nopep8
+            if role_group_element.find('a') is not None:
+                product_url = role_group_element.find('a')['href']  # nopep8
+                break
 
-        final_url = 'https://www.walmart.com' + product_url
-        print(final_url)
-        # Find the element containing the price of the first product
-        prices = soup.find_all(
-            'div', class_='mr1 mr2-xl b black lh-copy f5 f4-l')
+        # parse the redirect URL and extract the direct URL from it
+        parsed_url = urlparse(product_url)
+        query_params = parse_qs(parsed_url.query)
 
-        if not prices:
+        final_irl_if_not_redirect = 'https://www.walmart.com' + product_url
+
+        # check if key 'rd' exists in the query params
+        final_url = query_params['rd'][0] if query_params.keys() & {'rd'} else final_irl_if_not_redirect  # nopep8
+
+        price_text = role_group_element.select_one('div[data-testid="list-view"] div[data-automation-id="product-price"] div').text  # nopep8
+        if not price_text:
             raise Exception("Item price not found in Walmart search page")
 
-        first_price = prices[0]
-        # Extract the price from the text
-        price = first_price.text
-        print(price)
-        price = price.replace('$', '').strip()
+        numbers_and_dots = re.findall(r'[0-9.]+', price_text)
+        price = ''.join(numbers_and_dots)
+
         # Insert a dot before the last two digits
         price = price[:-2] + '.' + price[-2:]
-        # price = float(price)
+        price = float(price)
         # format the price to 2 decimal places
         # price = "{:.2f}".format(price)
         return {"Site": "Walmart", "Item title name": final_url, "Price(USD)": price}  # nopep8
@@ -126,10 +136,19 @@ def get_newegg_price(item: str) -> dict:
         final_url = ''
         # Find the first item that has a price (and is not an add)
         for item in items:
-            if item.find('div', class_='item-action').find('ul', class_='price').find('li', class_='price-current').find('strong') is not None:
-                # Extract the href attribute
-                final_url = item.find('a', class_='item-img').get('href')
-                break
+            item_action_div = item.find('div', class_='item-action')
+            if item_action_div is not None:
+                prive_div = item_action_div.find('ul', class_='price')
+                if prive_div is not None:
+                    price_current_li = prive_div.find(
+                        'li', class_='price-current')
+                    if price_current_li is not None:
+                        strong = price_current_li.find('strong')
+                        if strong is not None:
+                            # Extract the href attribute
+                            final_url = item.find(
+                                'a', class_='item-img').get('href')
+                            break
 
         if not final_url:
             raise Exception("Item page link not found in first item")
@@ -154,7 +173,7 @@ def get_newegg_price(item: str) -> dict:
             price = dollar_price + '' + cents_price
             price = price.replace(',', '')
             price = float(price)
-            price = "{:.2f}".format(price)
+            # price = "{:.2f}".format(price)
 
             return {"Site": "Newegg", "Item title name": final_url, "Price(USD)": price}  # nopep8
         else:
@@ -169,12 +188,15 @@ app = FastAPI()
 
 @app.get("/prices")
 def get_sites_data(item: str):
-    best_buy_price = get_best_buy_price(item)
-    walmart_price = get_walmart_price(item)
-    newegg_price = get_newegg_price(item)
-    return {"Best Buy": best_buy_price, "Walmart": walmart_price, "Newegg": newegg_price}
+    try:
+        best_buy_price = get_best_buy_price(item)["Price(USD)"]
+        walmart_price = get_walmart_price(item)["Price(USD)"]
+        newegg_price = get_newegg_price(item)["Price(USD)"]
+        return {"Best Buy": best_buy_price, "Walmart": walmart_price, "Newegg": newegg_price}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # Main
 if __name__ == "__main__":
-    get_walmart_price('iPhone ')
+    pass
