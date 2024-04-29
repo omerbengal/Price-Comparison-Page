@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import quote_plus
+from fastapi import FastAPI
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
@@ -84,6 +85,7 @@ def get_walmart_price(item: str) -> dict:
         product_url = product_url[product_url.index('/ip'):]
 
         final_url = 'https://www.walmart.com' + product_url
+        print(final_url)
         # Find the element containing the price of the first product
         prices = soup.find_all(
             'div', class_='mr1 mr2-xl b black lh-copy f5 f4-l')
@@ -94,12 +96,13 @@ def get_walmart_price(item: str) -> dict:
         first_price = prices[0]
         # Extract the price from the text
         price = first_price.text
+        print(price)
         price = price.replace('$', '').strip()
         # Insert a dot before the last two digits
         price = price[:-2] + '.' + price[-2:]
-        price = float(price)
+        # price = float(price)
         # format the price to 2 decimal places
-        price = "{:.2f}".format(price)
+        # price = "{:.2f}".format(price)
         return {"Site": "Walmart", "Item title name": final_url, "Price(USD)": price}  # nopep8
     else:
         raise Exception("Invalid Walmart search page response")
@@ -114,22 +117,22 @@ def get_newegg_price(item: str) -> dict:
         # Parse the HTML content
         soup = BeautifulSoup(response.content, 'html.parser')
 
-        # Find the first div with class "item-container"
-        first_item_container_div = soup.find('div', class_='item-container')
+        items = soup.find_all('div', class_='item-container')  # nopep8
 
         # Check if the div was not found
-        if not first_item_container_div:
+        if not items:
             raise Exception("No items found in Newegg search page")
 
-        # Find the first <a> element inside the div
-        first_a_inside_div = first_item_container_div.find('a')
+        final_url = ''
+        # Find the first item that has a price (and is not an add)
+        for item in items:
+            if item.find('div', class_='item-action').find('ul', class_='price').find('li', class_='price-current').find('strong') is not None:
+                # Extract the href attribute
+                final_url = item.find('a', class_='item-img').get('href')
+                break
 
-        # Check if the <a> element was found
-        if not first_a_inside_div:
+        if not final_url:
             raise Exception("Item page link not found in first item")
-
-        # Extract the href attribute
-        final_url = first_a_inside_div.get('href')
 
         response = get_response(final_url)
 
@@ -152,7 +155,6 @@ def get_newegg_price(item: str) -> dict:
             price = price.replace(',', '')
             price = float(price)
             price = "{:.2f}".format(price)
-            print(price)
 
             return {"Site": "Newegg", "Item title name": final_url, "Price(USD)": price}  # nopep8
         else:
@@ -161,6 +163,18 @@ def get_newegg_price(item: str) -> dict:
         raise Exception("Invalid Newegg search page response")
 
 
+# FastAPI
+app = FastAPI()
+
+
+@app.get("/prices")
+def get_sites_data(item: str):
+    best_buy_price = get_best_buy_price(item)
+    walmart_price = get_walmart_price(item)
+    newegg_price = get_newegg_price(item)
+    return {"Best Buy": best_buy_price, "Walmart": walmart_price, "Newegg": newegg_price}
+
+
 # Main
 if __name__ == "__main__":
-    pass
+    get_walmart_price('iPhone ')
