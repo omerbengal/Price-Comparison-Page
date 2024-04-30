@@ -78,19 +78,30 @@ def get_walmart_price(item: str) -> dict:
 
         # Find the element containing the URL of the first product
         # select a div which has the attribute "data-testid" and it's value is "item-stack"
-        products = soup.select('div[data-testid="item-stack"]')
+        item_stack = soup.select('div[data-testid="item-stack"]')
 
         # Check if the element was found
-        if not products:
+        if not item_stack:
             raise Exception("No items found in Walmart search page")
 
-        # get the link of the first product:
-        # structure: products div > div > div > div with attribute "role" and value "group" > a
+        if len(item_stack) > 1:
+            raise Exception("More than one item stacks found in Walmart search page")  # nopep8
+
+        products = item_stack[0].find_all('div', class_='mb0 ph1 ph0-xl pt0-xl pb3-m bb b--near-white w-25')  # nopep8
+
+        if products is None:
+            raise Exception("No products found in Walmart search page")
+
+        # go through each product and find the first product that is not a sponsered product
         for product in products:
-            role_group_element = product.find('div').find('div').select_one('div[role="group"]')  # nopep8
-            if role_group_element.find('a') is not None:
-                product_url = role_group_element.find('a')['href']  # nopep8
-                break
+            role_group_element = product.select_one('div[role="group"]')
+            if role_group_element is not None:
+                sponser = role_group_element.select_one('div[data-testid="list-view"] div div[class="mt5 mb0"] div')  # nopep8
+                if sponser is None:
+                    product_url = role_group_element.find('a')
+                    if product_url is not None:
+                        product_url = product_url.get('href')
+                    break
 
         # parse the redirect URL and extract the direct URL from it
         parsed_url = urlparse(product_url)
@@ -159,7 +170,12 @@ def get_newegg_price(item: str) -> dict:
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, 'html.parser')
             # Find the element containing the price of the first product
-            price = soup.find('li', class_='price-current')
+            row_side_div = soup.find('div', class_='row-side')
+
+            if row_side_div is None:
+                raise Exception("Item price not found in Newegg product page")
+
+            price = row_side_div.find('li', class_='price-current')
 
             if not price:
                 raise Exception("Item price not found in Newegg product page")
@@ -189,9 +205,9 @@ app = FastAPI()
 @app.get("/prices")
 def get_sites_data(item: str):
     try:
-        best_buy_price = get_best_buy_price(item)["Price(USD)"]
-        walmart_price = get_walmart_price(item)["Price(USD)"]
-        newegg_price = get_newegg_price(item)["Price(USD)"]
+        best_buy_price = get_best_buy_price(item)
+        walmart_price = get_walmart_price(item)
+        newegg_price = get_newegg_price(item)
         return {"Best Buy": best_buy_price, "Walmart": walmart_price, "Newegg": newegg_price}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
