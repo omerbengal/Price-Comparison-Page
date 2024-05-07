@@ -1,0 +1,64 @@
+/* styles/Table.module.css */
+.h1 {
+    text-align: center;
+    font-size: 5rem;
+}
+
+.form {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.input {
+    padding: 10px;
+    font-size: 1.5rem;
+}
+
+.button {
+    padding: 10px;
+    font-size: 1.5rem;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+.button:disabled {
+    cursor: wait;
+}
+
+.tableContainer {
+    margin: 20px auto;
+    width: 80%;
+    border-collapse: collapse;
+}
+
+.table {
+    width: 100%;
+    border: 1px solid #ddd;
+}
+
+.th,
+.td {
+    text-align: left;
+    padding: 8px;
+    border: 1px solid #ddd;
+}
+
+.th {
+    background-color: #0749ac;
+}
+
+.tr:hover {
+    /* Modified to include a local class */
+    background-color: #585656;
+}
+
+.text {
+    text-align: center;
+    font-size: 1.5rem;
+}
+
+.a:hover {
+    text-decoration: underline;
+}
