@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import quote_plus, urlparse, parse_qs
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import re
 
 HEADERS = {
@@ -55,7 +56,7 @@ def get_best_buy_price(item: str) -> dict:
             # If we reach here - we have the item price
             # extract the price as a number from the string
             item_price = float(item_price.replace('$', '').replace(',', '').strip())  # nopep8
-            return {"Site": "Best Buy", "Item title name": item_name, "Price(USD)": item_price, "Link": full_item_page_link}  # nopep8
+            return {"Item title name": full_item_page_link, "Price(USD)": item_price}  # nopep8
         else:
             raise Exception("Invalid item page response")
     else:
@@ -68,10 +69,6 @@ def get_walmart_price(item: str) -> dict:
 
     # check if response is valid
     if response.status_code == 200:
-
-        # put reponse text in html file
-        with open('walmart.html', 'w') as file:
-            file.write(response.text)
 
         # Parse the HTML content
         soup = BeautifulSoup(response.content, 'html.parser')
@@ -92,16 +89,21 @@ def get_walmart_price(item: str) -> dict:
         if products is None:
             raise Exception("No products found in Walmart search page")
 
+        product_url = None
+
         # go through each product and find the first product that is not a sponsered product
         for product in products:
             role_group_element = product.select_one('div[role="group"]')
             if role_group_element is not None:
-                sponser = role_group_element.select_one('div[data-testid="list-view"] div div[class="mt5 mb0"] div')  # nopep8
-                if sponser is None:
+                sponser = role_group_element.select_one('div[data-testid="list-view"] div div[class="mt5 mb0"]').text  # nopep8
+                if sponser == '':
                     product_url = role_group_element.find('a')
                     if product_url is not None:
                         product_url = product_url.get('href')
                     break
+
+        if product_url is None:
+            raise Exception("No items found in Walmart search page")
 
         # parse the redirect URL and extract the direct URL from it
         parsed_url = urlparse(product_url)
@@ -124,7 +126,7 @@ def get_walmart_price(item: str) -> dict:
         price = float(price)
         # format the price to 2 decimal places
         # price = "{:.2f}".format(price)
-        return {"Site": "Walmart", "Item title name": final_url, "Price(USD)": price}  # nopep8
+        return {"Item title name": final_url, "Price(USD)": price}  # nopep8
     else:
         raise Exception("Invalid Walmart search page response")
 
@@ -191,7 +193,7 @@ def get_newegg_price(item: str) -> dict:
             price = float(price)
             # price = "{:.2f}".format(price)
 
-            return {"Site": "Newegg", "Item title name": final_url, "Price(USD)": price}  # nopep8
+            return {"Item title name": final_url, "Price(USD)": price}  # nopep8
         else:
             raise Exception("Invalid Newegg product page response")
     else:
@@ -201,8 +203,17 @@ def get_newegg_price(item: str) -> dict:
 # FastAPI
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    # Allows all methods, including GET, POST, PUT, DELETE, etc.
+    allow_methods=["*"],
+    allow_headers=["*"],  # Allows all headers
+)
 
-@app.get("/prices")
+
+@app.get("/tableData")
 def get_sites_data(item: str):
     try:
         best_buy_price = get_best_buy_price(item)
